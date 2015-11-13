@@ -63,7 +63,10 @@ PRIVATE int hello_open(message *m)
 {
     struct ucred secret_owner;
 
-    if (m->)
+    if (owner = NO_OWNER) {
+        getnucred(m->USER_ENDPT, &secret_owner);
+        owner = secret_owner.uid
+    }
 
     return OK;
 }
