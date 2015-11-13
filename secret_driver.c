@@ -22,14 +22,34 @@ FORWARD _PROTOTYPE( int secret_transfer,  (int procnr, int opcode,
                                           u64_t position, iovec_t *iov,
                                           unsigned nr_req) );
 FORWARD _PROTOTYPE( void secret_geometry, (struct partition *entry) );
-FORWARD_PROTOTYPE( int secret_prepare, (struct driver *d, message *m) );
-FORWARD_PROTOTYPE( int ioctl, (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int secret_prepare, (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int ioctl, (struct driver *d, message *m) );
 
 /* SEF functions and variables. */
 FORWARD _PROTOTYPE( void sef_local_startup, (void) );
 FORWARD _PROTOTYPE( int sef_cb_init, (int type, sef_init_info_t *info) );
 FORWARD _PROTOTYPE( int sef_cb_lu_state_save, (int) );
 FORWARD _PROTOTYPE( int lu_state_restore, (void) );
+
+/* Allows owner of a secret to change ownership to another user */
+PRIVATE int ioctl (message *m) {
+   int returnValue;
+   struct ucred credential;
+   uid_t grantee; /* the uid of the new owner of the secret */
+   res = sys_safecopyfrom(m->IO_ENDPT, (vir_bytes)m->IO_GRANT,
+      0, (vir_bytes)&grantee, sizeof(grantee), D);
+   
+   
+   returnValue = getnucred(m->USER_ENDPT, &credential);
+   
+   /* Ensure that getnucred did not break */
+   if (returnValue != -1) {
+      
+   }
+
+   return i;
+}
+
 
 /* Entry points to the secret driver. */
 PRIVATE struct driver secret_tab =
@@ -114,7 +134,7 @@ PRIVATE struct device * secret_prepare(dev)
 {
     secret_device.dv_base.lo = 0;
     secret_device.dv_base.hi = 0;
-    secret_device.dv_size.lo = strlen(HELLO_MESSAGE);
+    secret_device.dv_size.lo = SECRET_SIZE;
     secret_device.dv_size.hi = 0;
     return &secret_device;
 }
@@ -130,8 +150,8 @@ PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
 
     printf("secret_transfer()\n");
 
-    bytes = strlen(HELLO_MESSAGE) - position.lo < iov->iov_size ?
-            strlen(HELLO_MESSAGE) - position.lo : iov->iov_size;
+    bytes = SECRET_SIZE - position.lo < iov->iov_size ?
+            SECRET_SIZE - position.lo : iov->iov_size;
 
     if (bytes <= 0)
     {
@@ -236,6 +256,8 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
 
 PUBLIC int main(int argc, char **argv)
 {
+   int owner = NO_OWNER;
+   
     /*
  *      * Perform initialization.
  *           */
