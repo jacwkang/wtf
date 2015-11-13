@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <minix/ds.h>
 #include "hello.h"
+
+#define NO_OWNER -1
+#define SECRET_SIZE 8912
+
+static void *secretkeeper;
+static uid_t owner;
  
 /*
  * Function prototypes for the hello driver.
