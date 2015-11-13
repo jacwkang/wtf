@@ -8,9 +8,18 @@
 #define NO_OWNER -1
 #define SECRET_SIZE 8912
 
-// secretkeeper holds the secret
-static void *secretkeeper;
-static uid_t owner;
+/** Secretkeeper holds the secret */
+PRIVATE static void *secretkeeper;
+/* ID of the current owner */
+PRIVATE static uid_t owner;
+/** Size of the current secret */
+PRIVATE static int size;
+/** Represents the /dev/secret device. */
+PRIVATE struct device secret_device;
+/** Flag to determine if device is currently being used */
+PRIVATE int occupied;
+
+
 /*
  *  * Function prototypes for the secret driver.
  *   */
@@ -34,20 +43,20 @@ FORWARD _PROTOTYPE( int lu_state_restore, (void) );
 /* Allows owner of a secret to change ownership to another user */
 PRIVATE int ioctl (message *m) {
    int returnValue;
-   struct ucred credential;
+   struct ucred *credential = calloc(1, sizeof(struct ucred));
+   
    uid_t grantee; /* the uid of the new owner of the secret */
    res = sys_safecopyfrom(m->IO_ENDPT, (vir_bytes)m->IO_GRANT,
-      0, (vir_bytes)&grantee, sizeof(grantee), D);
+    0, (vir_bytes)&grantee, sizeof(grantee), D);
    
+   returnValue = getnucred(m->USER_ENDPT, credential);
    
-   returnValue = getnucred(m->USER_ENDPT, &credential);
-   
-   /* Ensure that getnucred did not break */
    if (returnValue != -1) {
-      
+      owner = grantee;
+      return OK;
    }
 
-   return i;
+   return ENOTTY;
 }
 
 
@@ -69,8 +78,6 @@ PRIVATE struct driver secret_tab =
     do_nop,
 };
 
-/** Represents the /dev/secret device. */
-PRIVATE struct device secret_device;
 
 /** State variable to count the number of times the device has been opened. */
 PRIVATE int open_counter;
@@ -146,31 +153,38 @@ PRIVATE struct device * secret_prepare(dev)
     return &secret_device;
 }
 
-PRIVATE int secret_transfer(proc_nr, opcode, position, iov, nr_req)
-    int proc_nr;
-    int opcode;
-    u64_t position;
-    iovec_t *iov;
-    unsigned nr_req;
+PRIVATE int secret_transfer(endpoint_t endpt, int opcode, u64_t position, iovec_t *iov, unsigned nr_req)
 {
     int bytes, ret;
 
     printf("secret_transfer()\n");
 
-    bytes = SECRET_SIZE - position.lo < iov->iov_size ?
-            SECRET_SIZE - position.lo : iov->iov_size;
-
-    if (bytes <= 0)
-    {
-        return OK;
-    }
     switch (opcode)
     {
-        case DEV_GATHER_S:
-            ret = sys_safecopyto(proc_nr, iov->iov_addr, 0,
-                                (vir_bytes) (HELLO_MESSAGE + position.lo),
+        case DEV_GATHER_S: /* Reading */
+            bytes = iov->iov_size > size ? iov->iov_size : size;
+          
+            if (bytes <= 0) {
+               return OK;
+            }
+          
+            ret = sys_safecopyto(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+                                (vir_bytes) secret_keeper,
                                  bytes, D);
             iov->iov_size -= bytes;
+            break;
+          
+        case DEV_SCATTER_S: /* Writing */
+            bytes = iov->iov_size + size < SECRET_SIZE ? iov->iov_size : (SECRET_SIZE - size);
+          
+            if (bytes <= 0) {
+               return OK;
+            }
+          
+            ret = sys_safecopyfrom(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+             (vir_bytes) (secret_keeper + size), bytes, D);
+          
+            size += bytes;
             break;
 
         default:
