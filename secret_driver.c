@@ -120,7 +120,7 @@ PRIVATE int secret_open(message *m)
                     /* You must keep track of how many open file descriptors 
                      * there are, however, because the secret resets when the 
                      * last file descriptor closes after a read file descriptor
-                     *has been opened */
+                     * has been opened */
                 }
         }
     }
@@ -233,6 +233,9 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
 /* Initialize the secret driver. */
     int do_announce_driver = TRUE;
 
+    owner = NO_OWNER;
+    secretkeeper = malloc(SECRET_SIZE);
+
     open_counter = 0;
     switch(type) {
         case SEF_INIT_FRESH:
@@ -263,7 +266,7 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
 
 PUBLIC int main(int argc, char **argv)
 {
-   int owner = NO_OWNER;
+   // int owner = NO_OWNER; -> i moved this line to the init function
    
     /*
  *      * Perform initialization.
