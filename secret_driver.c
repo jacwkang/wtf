@@ -63,38 +63,45 @@ PRIVATE char * secret_name(void)
 
 PRIVATE int secret_open(message *m)
 {
-    struct ucred secret_owner;
+    struct ucred process_owner; /* has info of process trying to open secret */
 
-    /* if there is no current owner, get uid of calling process and set owner */
+    getnucred(m->USER_ENDPT, &process_owner);
+
+    /* if there is no current owner */
     if (owner == NO_OWNER) {
         switch (m->COUNT) {
             case O_WRONLY:
-                getnucred(m->USER_ENDPT, &secret_owner);
+                /* get uid of calling process and set owner */
                 owner = secret_owner.uid;
-                break;
 
             case O_RDWR:
                 printf("Permission denied");
                 return EACCES;
-                break;
-
-            case O_RDONLY:
-                break;
         }
     }
-    /* return ENOSPC if secret is full */
+    /* if secret is full */
     else {
-        switch (m->count) {
+        switch (m->COUNT) {
             case O_WRONLY:
-
-            case O_RDWR:
-
-            case O_RDONLY:
-
-            default:
                 printf("cannot create /dev/Secret: No space left on device");
                 return ENOSPC;
-                break;
+
+            case O_RDWR:
+                printf("Permission denied");
+                return EACCES;
+
+            case O_RDONLY:
+                /* if the process trying to open is not the secret owner */
+                if (owner != process_owner) {
+                    printf("Permission denied: this secret is owned by another process");
+                    return EACCES;
+                }
+                else {
+                    /* You must keep track of how many open file descriptors 
+                     * there are, however, because the secret resets when the 
+                     * last file descriptor closes after a read file descriptor
+                     *has been opened */
+                }
         }
     }
 
