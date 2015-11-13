@@ -5,11 +5,12 @@
 #include <minix/ds.h>
 #include <sys/ucred.h> // include for ucred struct
 
+#define NO_OWNER -1
 #define SECRET_SIZE 8912
 
 // secretkeeper holds the secret
-static void *secretkeeper = malloc(SECRET_SIZE);
-
+static void *secretkeeper;
+static uid_t owner;
 /*
  *  * Function prototypes for the hello driver.
  *   */
