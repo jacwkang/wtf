@@ -67,13 +67,35 @@ PRIVATE int secret_open(message *m)
 
     /* if there is no current owner, get uid of calling process and set owner */
     if (owner == NO_OWNER) {
-        getnucred(m->USER_ENDPT, &secret_owner);
-        owner = secret_owner.uid;
+        switch (m->COUNT) {
+            case O_WRONLY:
+                getnucred(m->USER_ENDPT, &secret_owner);
+                owner = secret_owner.uid;
+                break;
+
+            case O_RDWR:
+                printf("Permission denied");
+                return EACCES;
+                break;
+
+            case O_RDONLY:
+                break;
+        }
     }
     /* return ENOSPC if secret is full */
     else {
-        printf("cannot create /dev/Secret: No space left on device");
-        return ENOSPC;
+        switch (m->count) {
+            case O_WRONLY:
+
+            case O_RDWR:
+
+            case O_RDONLY:
+
+            default:
+                printf("cannot create /dev/Secret: No space left on device");
+                return ENOSPC;
+                break;
+        }
     }
 
     return OK;
