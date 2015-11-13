@@ -65,9 +65,15 @@ PRIVATE int secret_open(message *m)
 {
     struct ucred secret_owner;
 
-    if (owner = NO_OWNER) {
+    /* if there is no current owner, get uid of calling process and set owner */
+    if (owner == NO_OWNER) {
         getnucred(m->USER_ENDPT, &secret_owner);
-        owner = secret_owner.uid
+        owner = secret_owner.uid;
+    }
+    /* return ENOSPC if secret is full */
+    else {
+        printf("cannot create /dev/Secret: No space left on device");
+        return ENOSPC;
     }
 
     return OK;
