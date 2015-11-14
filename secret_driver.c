@@ -1,11 +1,12 @@
 #include <minix/drivers.h>
-#include <minix/driver.h>
-#include <minix/libchardriver.h>
+/*#include <minix/driver.h>*/
+#include <minix/chardriver.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <minix/ds.h>
 #include <minix/syslib.h>
-#include <sys/ioc_secret.h>
+/*#include <sys/ioc_secret.h>*/
+#include <sys/ucred.h>
 /*#include <minix/ucred.h>
 #include <minix/const.h>*/
 
@@ -49,7 +50,7 @@ FORWARD _PROTOTYPE( int lu_state_restore, (void) );
 
 
 /* Entry points to the secret driver. */
-struct chardriver hello_tab =
+struct chardriver secret_tab =
 {
     secret_open,
     secret_close,
@@ -61,7 +62,7 @@ struct chardriver hello_tab =
     nop_cancel,
     nop_select,
     NULL
-};
+}
 
 
 /* Allows owner of a secret to change ownership to another user */
@@ -146,10 +147,6 @@ PRIVATE int secret_open(message *m)
 
 PRIVATE int secret_close(message *m)
 {
-    //struct ucred process_owner;
-
-    //getnucred(m->USER_ENDPT, &process_owner);
-
     openFDs--;
 
     if (openFDs == 0) {
@@ -307,8 +304,8 @@ PUBLIC int main(int argc, char **argv)
     /*
      * Run the main loop.
      */
-    driver_task(&secret_tab, DRIVER_STD);
-    //chardriver_task(&hello_tab, CHARDRIVER_SYNC);
+    /*driver_task(&secret_tab, DRIVER_STD);*/
+    chardriver_task(&secret_tab, CHARDRIVER_SYNC);
     return OK;
 }
 

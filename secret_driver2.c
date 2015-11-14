@@ -62,7 +62,7 @@ static int ioctl (message *m) {
 
    uid_t grantee; /* the uid of the new owner of the secret */
    res = sys_safecopyfrom(m->USER_ENDPT, (vir_bytes)m->IO_GRANT,
-    0, (vir_bytes)&grantee, sizeof(grantee));
+     (vir_bytes)&grantee, sizeof(grantee));
 
    returnValue = getnucred(m->USER_ENDPT, credential);
 
@@ -89,13 +89,16 @@ static int secret_open(message *m)
             case O_WRONLY:
                 /* get uid of calling process and set owner */
                 owner = process_owner.uid;
+                printf("process with uid %d now owns the secret\n", owner);
                 openFDs++;
+                break;
 
             case O_RDONLY:
                 openFDs++;
+                break;
 
             case O_RDWR:
-                printf("Permission denied");
+                printf("3\n");
                 return EACCES;
         }
     }
@@ -119,6 +122,7 @@ static int secret_open(message *m)
                 else {
                     openFDs++;
                 }
+                break;
         }
     }
 
@@ -151,7 +155,7 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
 {
     int bytes, ret;
 
-    printf("secret_transfer()\n");
+    /*printf("secret_transfer()\n");*/
 
     if (nr_req != 1)
     {
@@ -169,6 +173,7 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
     switch (opcode)
     {
         case DEV_GATHER_S:
+            printf("here");
             ret = sys_safecopyto(endpt, (cp_grant_id_t) iov->iov_addr, 0,
                                 (vir_bytes) ((char *)secretkeeper + ex64lo(position)),
                                  bytes);
@@ -234,7 +239,7 @@ static int sef_cb_init(int type, sef_init_info_t *UNUSED(info))
     open_counter = 0;
     switch(type) {
         case SEF_INIT_FRESH:
-            printf("%s", "secret"); 
+            printf("\nService secret is now running\n"); 
         break;
 
         case SEF_INIT_LU:
