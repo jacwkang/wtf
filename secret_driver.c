@@ -11,6 +11,7 @@
 // secretkeeper holds the secret
 static void *secretkeeper;
 static uid_t owner;
+static int openFDs; /* this is a counter of open fd's */
 /*
  *  * Function prototypes for the secret driver.
  *   */
@@ -93,6 +94,10 @@ PRIVATE int secret_open(message *m)
             case O_WRONLY:
                 /* get uid of calling process and set owner */
                 owner = secret_owner.uid;
+                openFDs++;
+
+            case O_RDONLY:
+                openFDs++;
 
             case O_RDWR:
                 printf("Permission denied");
@@ -113,7 +118,7 @@ PRIVATE int secret_open(message *m)
             case O_RDONLY:
                 /* if the process trying to open is not the secret owner */
                 if (owner != process_owner) {
-                    printf("Permission denied: this secret is owned by another process");
+                    printf("Permission denied: secret is owned by process %d", owner);
                     return EACCES;
                 }
                 else {
@@ -121,6 +126,7 @@ PRIVATE int secret_open(message *m)
                      * there are, however, because the secret resets when the 
                      * last file descriptor closes after a read file descriptor
                      * has been opened */
+                    openFDs++; 
                 }
         }
     }
@@ -128,11 +134,9 @@ PRIVATE int secret_open(message *m)
     return OK;
 }
 
-PRIVATE int secret_close(d, m)
-    struct driver *d;
-    message *m;
+PRIVATE int secret_close(message *m)
 {
-    printf("secret_close()\n");
+    
     return OK;
 }
 
@@ -209,14 +213,15 @@ PRIVATE int lu_state_restore() {
 PRIVATE void sef_local_startup()
 {
     /*
- *      * Register init callbacks. Use the same function for all event types
- *           */
+     * Register init callbacks. Use the same function for all event types
+     */
     sef_setcb_init_fresh(sef_cb_init);
     sef_setcb_init_lu(sef_cb_init);
     sef_setcb_init_restart(sef_cb_init);
+
     /*
- *      * Register live update callbacks.
- *           */
+     * Register live update callbacks.
+     */
     /* - Agree to update immediately when LU is requested in a valid state. */
     sef_setcb_lu_prepare(sef_cb_lu_prepare_always_ready);
     /* - Support live update starting from any standard state. */
@@ -235,6 +240,7 @@ PRIVATE int sef_cb_init(int type, sef_init_info_t *info)
 
     owner = NO_OWNER;
     secretkeeper = malloc(SECRET_SIZE);
+    openFDs = 0;
 
     open_counter = 0;
     switch(type) {
@@ -269,13 +275,13 @@ PUBLIC int main(int argc, char **argv)
    // int owner = NO_OWNER; -> i moved this line to the init function
    
     /*
- *      * Perform initialization.
- *           */
+     * Perform initialization.
+     */
     sef_local_startup();
 
     /*
- *      * Run the main loop.
- *           */
+     * Run the main loop.
+     */
     driver_task(&secret_tab, DRIVER_STD);
     return OK;
 }
