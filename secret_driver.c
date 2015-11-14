@@ -146,11 +146,17 @@ PRIVATE int secret_open(message *m)
 
 PRIVATE int secret_close(message *m)
 {
-    struct ucred process_owner;
+    //struct ucred process_owner;
 
-    getnucred(m->USER_ENDPT, &process_owner);
+    //getnucred(m->USER_ENDPT, &process_owner);
 
+    openFDs--;
 
+    if (openFDs == 0) {
+        owner = NO_OWNER;
+        free(secretkeeper);
+        secretkeeper = malloc(SECRET_SIZE);
+    }
 
     return OK;
 }
