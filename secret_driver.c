@@ -27,11 +27,9 @@ struct device secret_device;
 /** Flag to determine if device is currently being used */
 int occupied;
 
-
->>>>>>> 5687a5934e31ba971de60cc6dde3b4cdd1a605a4
 /*
- *  * Function prototypes for the secret driver.
- *   */
+ * Function prototypes for the secret driver.
+ */
 FORWARD _PROTOTYPE( char * secret_name,   (void) );
 FORWARD _PROTOTYPE( int secret_open,      (message *m) );
 FORWARD _PROTOTYPE( int secret_close,     (message *m) );
@@ -148,7 +146,12 @@ PRIVATE int secret_open(message *m)
 
 PRIVATE int secret_close(message *m)
 {
-    
+    struct ucred process_owner;
+
+    getnucred(m->USER_ENDPT, &process_owner);
+
+
+
     return OK;
 }
 
