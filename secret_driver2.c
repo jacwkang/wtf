@@ -95,7 +95,6 @@ static int secret_open(message *m)
                 /* Get uid of calling process */
                 owner = process_owner.uid;
                 occupied = 1;
-                printf("process with uid %d now owns the secret\n", owner);
                 openFDs++;
                 break;
 
@@ -150,12 +149,10 @@ static int secret_open(message *m)
 static int secret_close(message *m)
 {
     openFDs--;
-    printf("SECRET CLOSE\n");
 
     if (!occupied) {
         owner = NO_OWNER;
-        free(secretkeeper);
-        secretkeeper = malloc(SECRET_SIZE);
+         memset(secretkeeper, 0, SECRET_SIZE); /* Clears the secretkeeper */
     }
 
     return OK;
