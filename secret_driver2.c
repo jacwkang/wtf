@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <minix/ds.h>
 #include <minix/syslib.h>
-/*#include <sys/ioc_secret.h>
-*/
+#include <sys/ioc_secret.h>
+
 #define NO_OWNER -1
 #define O_WRONLY 2
 #define O_RDONLY 4
@@ -32,7 +32,7 @@ static struct device * secret_prepare(dev_t device);
 static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
 	iovec_t *iov, unsigned int nr_req, endpoint_t user_endpt, unsigned int
 	flags);
-static int ioctl(message *m);
+int ioctl (int _fd, int _request, void *_data);
 
 /* SEF functions and variables. */
 static void sef_local_startup(void);
@@ -59,22 +59,25 @@ static struct chardriver secret_tab =
 static struct device secret_device;
 
 /* Allows owner of a secret to change ownership to another user */
-static int ioctl (message *m) {
+int ioctl (int _fd, int _request, void *_data) {
    int returnValue, res;
-   struct ucred *credential = calloc(1, sizeof(struct ucred));
+   struct ucred process_owner;
 
    uid_t grantee; /* the uid of the new owner of the secret */
-   res = sys_safecopyfrom(m->USER_ENDPT, (vir_bytes)m->IO_GRANT, 0,
-     (vir_bytes)&grantee, sizeof(grantee));
+   res = sys_safecopyfrom((endpoint_t)_data, (vir_bytes)owner, 0,
+     (vir_bytes)&grantee, sizeof(uid_t));
 
-   returnValue = getnucred(m->USER_ENDPT, credential);
-
-   if (returnValue != -1) {
+   returnValue = getnucred((endpoint_t)_data, &process_owner);
+   printf("BOUTTA CHANGE OWNERS\n");
+   
+   /* Make sure the process changing control owns the secret */
+   if (process_owner.uid == owner) {
+      printf("CHANGED OWNERS\n");
       owner = grantee;
       return OK;
    }
 
-   return ENOTTY;
+   return OK;
 }
 
 /** State variable to count the number of times the device has been opened. */
@@ -114,12 +117,12 @@ static int secret_open(message *m)
     else {
         switch (m->COUNT) {
             case O_WRONLY: /* Write */
-                if (occupied) { /* If it is currently used */
-                  return ENOSPC;
-                }
                 /* Different process attempting to access */
-                else if (occupied && (owner != process_owner.uid)) {
+                if (occupied && (owner != process_owner.uid)) {
                   return EACCES;
+                }
+                else if (occupied) { /* If it is currently used */
+                  return ENOSPC;
                 }
                 break;
 
@@ -171,8 +174,6 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
 {
     int bytes;
     int ret = 0;
-
-    /*printf("secret_transfer()\n");*/
 
     if (nr_req != 1)
     {
