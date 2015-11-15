@@ -86,6 +86,8 @@ static int secret_open(message *m)
 
     getnucred(m->USER_ENDPT, &process_owner);
 
+    printf("process uid: %d", process_owner.uid);
+
     /* If there is no current owner */
     if (owner == NO_OWNER) {
         switch (m->COUNT) {
@@ -98,6 +100,8 @@ static int secret_open(message *m)
                 break;
 
             case O_RDONLY: /* Read */
+                owner = process_owner.uid;
+                
                 break;
 
             case O_RDWR: /* Read/Write */
@@ -190,8 +194,8 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
     {
         case DEV_GATHER_S: /* Read */
             ret = sys_safecopyto(endpt, (cp_grant_id_t) iov->iov_addr, 0,
-                                (vir_bytes) ((char *)secretkeeper + ex64lo(position)),
-                                 bytes);
+            (vir_bytes)((char *)secretkeeper + ex64lo(position)), bytes);
+
             iov->iov_size -= bytes;
           
             occupied = 0;
