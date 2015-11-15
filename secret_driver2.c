@@ -15,7 +15,7 @@
 /* Secretkeeper holds the secret */
 static void *secretkeeper;
 /* ID of the current owner */
-static uid_t owner;
+static uid_t owner = NO_OWNER;
 /* Counter of open file descriptors */
 static int openFDs;
 /* Flag to determine if device is currently being used */
@@ -98,11 +98,9 @@ static int secret_open(message *m)
                 break;
 
             case O_RDONLY: /* Read */
-                openFDs++;
                 break;
 
             case O_RDWR: /* Read/Write */
-                printf("3\n");
                 return EACCES;
               
             default:
@@ -114,7 +112,6 @@ static int secret_open(message *m)
         switch (m->COUNT) {
             case O_WRONLY: /* Write */
                 if (occupied) { /* If it is currently used */
-                  printf("cannot create /dev/Secret: No space left on device\n");
                   return ENOSPC;
                 }
                 /* Different process attempting to access */
@@ -126,7 +123,6 @@ static int secret_open(message *m)
             case O_RDONLY: /* Read */
                 /* If the process trying to open is not the secret owner */
                 if (owner != process_owner.uid) {
-                    printf("Permission denied: this secret is owned by another process\n");
                     return EACCES;
                 }
                 else {
@@ -137,7 +133,6 @@ static int secret_open(message *m)
                 break;
               
             case O_RDWR: /* Read/Write */
-                printf("Permission denied\n");
                 return EACCES;
               
             default:
@@ -151,8 +146,9 @@ static int secret_open(message *m)
 static int secret_close(message *m)
 {
     openFDs--;
+    printf("SECRET CLOSE\n");
 
-    if (occupied == 0) {
+    if (!occupied) {
         owner = NO_OWNER;
         free(secretkeeper);
         secretkeeper = malloc(SECRET_SIZE);
