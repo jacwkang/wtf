@@ -113,7 +113,6 @@ static int secret_open(message *m)
         switch (m->COUNT) {
             case O_WRONLY: /* Write */
                 if (occupied) { /* If it is currently used */
-                  printf("cannot create /dev/Secret: No space left on device\n");
                   return ENOSPC;
                 }
                 /* Different process attempting to access */
@@ -125,7 +124,6 @@ static int secret_open(message *m)
             case O_RDONLY: /* Read */
                 /* If the process trying to open is not the secret owner */
                 if (owner != process_owner.uid) {
-                    printf("Permission denied: this secret is owned by another process\n");
                     return EACCES;
                 }
                 else {
@@ -135,7 +133,6 @@ static int secret_open(message *m)
                 }
                 break;
             case O_RDWR: /* Read/Write */
-                printf("Permission denied\n");
                 return EACCES;
             default:
                break;
