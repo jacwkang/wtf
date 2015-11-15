@@ -19,9 +19,9 @@ static uid_t owner;
 /* Counter of open file descriptors */
 static int openFDs;
 /* Flag to determine if device is currently being used */
-static int occupied;
+static int occupied = 0;
 /* Size of the current secret */
-static int size;
+static int size = 0;
 
 /*
  * Function prototypes for the secret driver.
@@ -104,6 +104,7 @@ static int secret_open(message *m)
             case O_RDWR: /* Read/Write */
                 printf("3\n");
                 return EACCES;
+              
             default:
                break;
         }
@@ -134,9 +135,11 @@ static int secret_open(message *m)
                      openFDs++;
                 }
                 break;
+              
             case O_RDWR: /* Read/Write */
                 printf("Permission denied\n");
                 return EACCES;
+              
             default:
                break;
         }
@@ -149,7 +152,7 @@ static int secret_close(message *m)
 {
     openFDs--;
 
-    if (openFDs == 0) {
+    if (occupied == 0) {
         owner = NO_OWNER;
         free(secretkeeper);
         secretkeeper = malloc(SECRET_SIZE);
@@ -169,7 +172,8 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
     iovec_t *iov, unsigned nr_req, endpoint_t UNUSED(user_endpt),
     unsigned int UNUSED(flags))
 {
-    int bytes, ret;
+    int bytes;
+    int ret = 0;
 
     /*printf("secret_transfer()\n");*/
 
@@ -211,8 +215,14 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
 }
 
 static int sef_cb_lu_state_save(int UNUSED(state)) {
-/* Save the state. */
+   /* Save the state. */
     ds_publish_u32("open_counter", open_counter, DSF_OVERWRITE);
+    ds_publish_u32("occupied", occupied, DSF_OVERWRITE);
+    ds_publish_u32("secretkeeper", secretkeeper, DSF_OVERWRITE);
+    ds_publish_u32("owner", owner, DSF_OVERWRITE);
+    ds_publish_u32("openFDs", openFDs, DSF_OVERWRITE);
+    /*ds_publish_u32("size", size, DSF_OVERWRITE);*/
+   
 
     return OK;
 }
@@ -224,6 +234,21 @@ static int lu_state_restore() {
     ds_retrieve_u32("open_counter", &value);
     ds_delete_u32("open_counter");
     open_counter = (int) value;
+   
+    ds_retrieve_u32("occupied", &value);
+    ds_delete_u32("occupied");
+    occupied = (int) value;
+   
+    ds_retrieve_u32("owner", &value);
+    ds_delete_u32("owner");
+    occupied = (uid_t) value;
+   
+    ds_retrieve_u32("secretkeeper", secretkeeper); /* secretkeeper is a pointer */
+    ds_delete_u32("secretkeeper");
+   
+    ds_retrieve_u32("openFDs", &value);
+    ds_delete_u32("openFDs");
+    openFDs = (int) value;
 
     return OK;
 }
@@ -290,6 +315,7 @@ static int sef_cb_init(int type, sef_init_info_t *UNUSED(info))
 
 int main(void)
 {
+   
     /*
      * Perform initialization.
      */
