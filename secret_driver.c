@@ -32,15 +32,16 @@ int occupied;
  * Function prototypes for the secret driver.
  */
 FORWARD _PROTOTYPE( char * secret_name,   (void) );
-FORWARD _PROTOTYPE( int secret_open,      (message *m) );
-FORWARD _PROTOTYPE( int secret_close,     (message *m) );
+FORWARD _PROTOTYPE( int secret_open,      (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int secret_close,     (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( int ioctl, (struct driver *d, message *m) );
+FORWARD _PROTOTYPE( struct device *secret_prepare, (int device) );
 /*FORWARD _PROTOTYPE( struct device * secret_prepare, (int device) );*/
 FORWARD _PROTOTYPE( int secret_transfer,  (int procnr, int opcode,
                                           u64_t position, iovec_t *iov,
                                           unsigned nr_req) );
 FORWARD _PROTOTYPE( void secret_geometry, (struct partition *entry) );
-FORWARD _PROTOTYPE( int secret_prepare, (message *m) );
-FORWARD _PROTOTYPE( int ioctl, (message *m) );
+
 
 /* SEF functions and variables. */
 FORWARD _PROTOTYPE( void sef_local_startup, (void) );
@@ -52,21 +53,24 @@ FORWARD _PROTOTYPE( int lu_state_restore, (void) );
 /* Entry points to the secret driver. */
 struct chardriver secret_tab =
 {
+    secret_name,
     secret_open,
     secret_close,
-    ioctl,
+    nop_ioctl,
     secret_prepare,
     secret_transfer,
     nop_cleanup,
+    secret_geometry,
     nop_alarm,
     nop_cancel,
     nop_select,
+    nop_ioctl,
     NULL
 }
 
 
 /* Allows owner of a secret to change ownership to another user */
-PRIVATE int ioctl (message *m) {
+PRIVATE int ioctl (struct driver *d, message *m) {
    int returnValue, res;
    struct ucred *credential = calloc(1, sizeof(struct ucred));
    
@@ -93,7 +97,7 @@ PRIVATE char * secret_name(void)
     return "secret";
 }
 
-PRIVATE int secret_open(message *m)
+PRIVATE int secret_open(struct driver *d, message *m)
 {
     struct ucred process_owner; /* has info of process trying to open secret */
 
@@ -145,7 +149,7 @@ PRIVATE int secret_open(message *m)
     return OK;
 }
 
-PRIVATE int secret_close(message *m)
+PRIVATE int secret_close(struct driver *d, message *m)
 {
     openFDs--;
 
@@ -158,16 +162,16 @@ PRIVATE int secret_close(message *m)
     return OK;
 }
 
-PRIVATE int secret_prepare(message *m)
+PRIVATE struct device *secret_prepare(int device)
 {
     secret_device.dv_base.lo = 0;
     secret_device.dv_base.hi = 0;
     secret_device.dv_size.lo = SECRET_SIZE;
     secret_device.dv_size.hi = 0;
-    return 0;
+    return &secret_device;
 }
 
-PRIVATE int secret_transfer(endpoint_t endpt, int opcode, u64_t position, iovec_t *iov, unsigned nr_req)
+PRIVATE int secret_transfer(int procnr, int opcode, u64_t position, iovec_t *iov, unsigned nr_req)
 {
     int bytes, ret;
 
@@ -182,7 +186,7 @@ PRIVATE int secret_transfer(endpoint_t endpt, int opcode, u64_t position, iovec_
                return OK;
             }
           
-            ret = sys_safecopyto(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+            ret = sys_safecopyto((endpoint_t) procnr, (cp_grant_id_t) iov->iov_addr, 0,
                                 (vir_bytes) secretkeeper,
                                  bytes, D);
             iov->iov_size -= bytes;
@@ -195,7 +199,7 @@ PRIVATE int secret_transfer(endpoint_t endpt, int opcode, u64_t position, iovec_
                return OK;
             }
           
-            ret = sys_safecopyfrom(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+            ret = sys_safecopyfrom((endpoint_t) procnr, (cp_grant_id_t) iov->iov_addr, 0,
              (vir_bytes) (secretkeeper), bytes, D);
           
             size += bytes;
@@ -304,8 +308,10 @@ PUBLIC int main(int argc, char **argv)
     /*
      * Run the main loop.
      */
+
     /*driver_task(&secret_tab, DRIVER_STD);*/
     chardriver_task(&secret_tab, CHARDRIVER_SYNC);
+
     return OK;
 }
 

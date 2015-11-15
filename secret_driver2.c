@@ -12,13 +12,16 @@
 #define O_RDWR 6
 #define SECRET_SIZE 8912
 
-/** Secretkeeper holds the secret */
+/* Secretkeeper holds the secret */
 static void *secretkeeper;
 /* ID of the current owner */
 static uid_t owner;
-static int openFDs; /* this is a counter of open fd's */
-/** Flag to determine if device is currently being used */
-int occupied;
+/* Counter of open file descriptors */
+static int openFDs;
+/* Flag to determine if device is currently being used */
+static int occupied;
+/* Size of the current secret */
+static int size;
 
 /*
  * Function prototypes for the secret driver.
@@ -61,7 +64,7 @@ static int ioctl (message *m) {
    struct ucred *credential = calloc(1, sizeof(struct ucred));
 
    uid_t grantee; /* the uid of the new owner of the secret */
-   res = sys_safecopyfrom(m->USER_ENDPT, (vir_bytes)m->IO_GRANT,
+   res = sys_safecopyfrom(m->USER_ENDPT, (vir_bytes)m->IO_GRANT, 0,
      (vir_bytes)&grantee, sizeof(grantee));
 
    returnValue = getnucred(m->USER_ENDPT, credential);
@@ -83,46 +86,59 @@ static int secret_open(message *m)
 
     getnucred(m->USER_ENDPT, &process_owner);
 
-    /* if there is no current owner */
+    /* If there is no current owner */
     if (owner == NO_OWNER) {
         switch (m->COUNT) {
-            case O_WRONLY:
-                /* get uid of calling process and set owner */
+            case O_WRONLY: /* Write */
+                /* Get uid of calling process */
                 owner = process_owner.uid;
+                occupied = 1;
                 printf("process with uid %d now owns the secret\n", owner);
                 openFDs++;
                 break;
 
-            case O_RDONLY:
+            case O_RDONLY: /* Read */
                 openFDs++;
                 break;
 
-            case O_RDWR:
+            case O_RDWR: /* Read/Write */
                 printf("3\n");
                 return EACCES;
+            default:
+               break;
         }
     }
-    /* if secret is full */
+    /* If there is a current owner */
     else {
         switch (m->COUNT) {
-            case O_WRONLY:
-                printf("cannot create /dev/Secret: No space left on device");
-                return ENOSPC;
+            case O_WRONLY: /* Write */
+                if (occupied) { /* If it is currently used */
+                  printf("cannot create /dev/Secret: No space left on device\n");
+                  return ENOSPC;
+                }
+                /* Different process attempting to access */
+                else if (occupied && (owner != process_owner.uid)) {
+                  return EACCES;
+                }
+                break;
 
-            case O_RDWR:
-                printf("Permission denied");
-                return EACCES;
-
-            case O_RDONLY:
-                /* if the process trying to open is not the secret owner */
+            case O_RDONLY: /* Read */
+                /* If the process trying to open is not the secret owner */
                 if (owner != process_owner.uid) {
-                    printf("Permission denied: this secret is owned by another process");
+                    printf("Permission denied: this secret is owned by another process\n");
                     return EACCES;
                 }
                 else {
-                    openFDs++;
+                     occupied = 0;
+                     owner = NO_OWNER; /* Secret has been given up, no owner */
+                     openFDs++;
                 }
                 break;
+            case O_RDWR: /* Read/Write */
+                printf("Permission denied\n");
+                return EACCES;
+            default:
+               break;
         }
     }
 
@@ -172,14 +188,22 @@ static int secret_transfer(endpoint_t endpt, int opcode, u64_t position,
     }
     switch (opcode)
     {
-        case DEV_GATHER_S:
-            printf("here");
+        case DEV_GATHER_S: /* Read */
             ret = sys_safecopyto(endpt, (cp_grant_id_t) iov->iov_addr, 0,
                                 (vir_bytes) ((char *)secretkeeper + ex64lo(position)),
                                  bytes);
             iov->iov_size -= bytes;
+          
+            occupied = 0;
             break;
 
+        case DEV_SCATTER_S: /* Write */
+            ret = sys_safecopyfrom(endpt, (cp_grant_id_t) iov->iov_addr, 0,
+            (vir_bytes) ((char *)secretkeeper), bytes);
+          
+            occupied = 1;
+            break;
+          
         default:
             return EINVAL;
     }
